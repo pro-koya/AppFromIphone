@@ -1,0 +1,31 @@
+{
+  "expo": {
+    "name": "Daily Block Puzzle",
+    "slug": "daily-block-puzzle",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#F5F0E8"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.yourcompany.dailyblockpuzzle"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#F5F0E8",
+        "foregroundImage": "./assets/android-icon-foreground.png"
+      }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "@react-native-async-storage/async-storage"
+    ]
+  }
+}
