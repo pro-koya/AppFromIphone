@@ -1,24 +1,102 @@
-import React from 'react';
-import { View, StyleSheet, TouchableOpacity, Text } from 'react-native';
+import React, { useRef } from 'react';
+import { View, StyleSheet, Animated, PanResponder } from 'react-native';
 import { Piece } from '../game/types';
-import { Colors, Radii, Spacing, Typography } from '../theme';
+import { Colors, Radii, Spacing } from '../theme';
 
 const PREVIEW_CELL = 16;
-const GRID_SIZE = 5; // max piece fits in 5x5 grid
+const GRID_SIZE = 5;
+const DRAG_THRESHOLD = 8;
 
 interface PiecePreviewProps {
   piece: Piece;
   isSelected: boolean;
   onSelect: () => void;
   index: number;
+  isDragging?: boolean;
+  onDragStart?: (index: number, pageX: number, pageY: number) => void;
+  onDragMove?: (pageX: number, pageY: number) => void;
+  onDragEnd?: (pageX: number, pageY: number) => void;
 }
 
 const PIECE_COLORS = [Colors.boardBg, ...Colors.pieces];
 
-export function PiecePreview({ piece, isSelected, onSelect, index }: PiecePreviewProps) {
+export function PiecePreview({
+  piece,
+  isSelected,
+  onSelect,
+  index,
+  isDragging = false,
+  onDragStart,
+  onDragMove,
+  onDragEnd,
+}: PiecePreviewProps) {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const draggingRef = useRef(false);
+
+  // Use refs for callbacks so PanResponder always has fresh values
+  const callbacksRef = useRef({ onDragStart, onDragMove, onDragEnd, onSelect, index });
+  callbacksRef.current = { onDragStart, onDragMove, onDragEnd, onSelect, index };
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => {
+        // Touch started — not sure if drag or tap yet
+        draggingRef.current = false;
+      },
+      onPanResponderMove: (_evt, gs) => {
+        if (!draggingRef.current) {
+          if (Math.abs(gs.dx) > DRAG_THRESHOLD || Math.abs(gs.dy) > DRAG_THRESHOLD) {
+            draggingRef.current = true;
+            Animated.spring(scaleAnim, {
+              toValue: 0.6,
+              tension: 300,
+              friction: 15,
+              useNativeDriver: true,
+            }).start();
+            callbacksRef.current.onDragStart?.(
+              callbacksRef.current.index,
+              gs.moveX,
+              gs.moveY,
+            );
+          }
+        } else {
+          callbacksRef.current.onDragMove?.(gs.moveX, gs.moveY);
+        }
+      },
+      onPanResponderRelease: (_evt, gs) => {
+        if (draggingRef.current) {
+          draggingRef.current = false;
+          Animated.spring(scaleAnim, {
+            toValue: 1,
+            tension: 300,
+            friction: 15,
+            useNativeDriver: true,
+          }).start();
+          callbacksRef.current.onDragEnd?.(gs.moveX, gs.moveY);
+        } else {
+          // It was a tap
+          callbacksRef.current.onSelect();
+        }
+      },
+      onPanResponderTerminate: (_evt, gs) => {
+        if (draggingRef.current) {
+          draggingRef.current = false;
+          Animated.spring(scaleAnim, {
+            toValue: 1,
+            tension: 300,
+            friction: 15,
+            useNativeDriver: true,
+          }).start();
+          callbacksRef.current.onDragEnd?.(gs.moveX, gs.moveY);
+        }
+      },
+    })
+  ).current;
+
   // Build mini grid
   const grid = Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(false));
-  // Normalize shape to start at 0,0
   const minR = Math.min(...piece.shape.map(([r]) => r));
   const minC = Math.min(...piece.shape.map(([, c]) => c));
   for (const [r, c] of piece.shape) {
@@ -34,10 +112,16 @@ export function PiecePreview({ piece, isSelected, onSelect, index }: PiecePrevie
   const width = Math.max(...piece.shape.map(([, c]) => c - minC)) + 1;
 
   return (
-    <TouchableOpacity
-      onPress={onSelect}
-      style={[styles.container, isSelected && styles.selectedContainer]}
-      activeOpacity={0.7}
+    <Animated.View
+      {...panResponder.panHandlers}
+      style={[
+        styles.container,
+        isSelected && styles.selectedContainer,
+        {
+          transform: [{ scale: scaleAnim }],
+          opacity: isDragging ? 0.3 : 1,
+        },
+      ]}
     >
       <View style={[styles.grid, { height: height * PREVIEW_CELL, width: width * PREVIEW_CELL }]}>
         {grid.slice(0, height).map((row, r) => (
@@ -55,7 +139,7 @@ export function PiecePreview({ piece, isSelected, onSelect, index }: PiecePrevie
           </View>
         ))}
       </View>
-    </TouchableOpacity>
+    </Animated.View>
   );
 }
 

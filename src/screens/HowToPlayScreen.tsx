@@ -43,7 +43,7 @@ const STEPS = [
 export function HowToPlayScreen({ navigation }: Props) {
   const handleClose = async () => {
     await Storage.markHowToSeen();
-    Analytics.logEvent('howto_closed', {});
+    Analytics.logEvent('tutorial_complete', {});
     navigation.goBack();
   };
 
@@ -52,7 +52,7 @@ export function HowToPlayScreen({ navigation }: Props) {
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <Text style={styles.title}>遊び方</Text>
-          <Text style={styles.subtitle}>Daily Block Puzzle</Text>
+          <Text style={styles.subtitle}>Calm Blokku</Text>
         </View>
 
         {STEPS.map((item) => (

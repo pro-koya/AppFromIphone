@@ -1,28 +1,42 @@
 /**
  * Analytics abstraction layer.
- * MVP: logs to console. Replace with Firebase Analytics for production.
  *
- * To integrate Firebase:
- *   npm install @react-native-firebase/app @react-native-firebase/analytics
- *   Replace logEvent body with: analytics().logEvent(name, params)
+ * This intentionally stays dependency-free until Firebase is fully configured
+ * for the iOS release build.
  */
 
-type EventParams = Record<string, string | number | boolean>;
+type EventParamValue = string | number | boolean | null | undefined;
+type EventParams = Record<string, EventParamValue>;
+
+function sanitizeParams(params: EventParams = {}): Record<string, string | number> {
+  const sanitized: Record<string, string | number> = {};
+
+  for (const [key, value] of Object.entries(params)) {
+    if (value === null || value === undefined) continue;
+    sanitized[key] = typeof value === 'boolean' ? (value ? 1 : 0) : value;
+  }
+
+  return sanitized;
+}
 
 export const Analytics = {
-  logEvent(name: string, params: EventParams): void {
+  initialize(): void {
     if (__DEV__) {
-      console.log(`[Analytics] ${name}`, params);
+      console.log('[Analytics] Initialized with console fallback');
     }
-    // TODO: Replace with Firebase Analytics in production
-    // import analytics from '@react-native-firebase/analytics';
-    // analytics().logEvent(name, params);
+  },
+
+  logEvent(name: string, params: EventParams = {}): void {
+    const sanitizedParams = sanitizeParams(params);
+
+    if (__DEV__) {
+      console.log(`[Analytics] ${name}`, sanitizedParams);
+    }
   },
 
   logScreen(screenName: string): void {
     if (__DEV__) {
       console.log(`[Analytics] screen_view: ${screenName}`);
     }
-    // analytics().logScreenView({ screen_name: screenName });
   },
 };

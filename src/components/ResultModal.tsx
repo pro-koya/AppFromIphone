@@ -3,11 +3,12 @@ import {
   View,
   Text,
   StyleSheet,
-  Modal,
   TouchableOpacity,
   Animated,
 } from 'react-native';
 import { Colors, Typography, Spacing, Radii } from '../theme';
+import { OverlayModal } from './OverlayModal';
+import { StarDisplay } from './StarDisplay';
 
 interface ResultModalProps {
   visible: boolean;
@@ -15,11 +16,14 @@ interface ResultModalProps {
   score: number;
   linesCleared: number;
   canRevive: boolean;
+  piecesRemaining: number;
   onRevive: () => void;
   onNext: () => void;
   onRetry: () => void;
   isLastPuzzle: boolean;
   adReady: boolean;
+  comboCount?: number;
+  stars?: number;
 }
 
 export function ResultModal({
@@ -28,21 +32,19 @@ export function ResultModal({
   score,
   linesCleared,
   canRevive,
+  piecesRemaining,
   onRevive,
   onNext,
   onRetry,
   isLastPuzzle,
   adReady,
+  comboCount,
+  stars,
 }: ResultModalProps) {
   const isSuccess = type === 'success';
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      statusBarTranslucent
-    >
+    <OverlayModal visible={visible}>
       <View style={styles.overlay}>
         <View style={styles.card}>
           {/* Header */}
@@ -52,6 +54,13 @@ export function ResultModal({
               {isSuccess ? 'クリア！' : '配置できません'}
             </Text>
           </View>
+
+          {/* Star rating (success only) */}
+          {isSuccess && stars != null && stars > 0 && (
+            <View style={styles.starSection}>
+              <StarDisplay stars={stars} animate size="lg" />
+            </View>
+          )}
 
           {/* Stats (success only) */}
           {isSuccess && (
@@ -66,25 +75,37 @@ export function ResultModal({
                   <Text style={[styles.statValue, styles.bonusValue]}>+{linesCleared}</Text>
                 </View>
               )}
+              {(comboCount ?? 0) >= 2 && (
+                <View style={styles.statRow}>
+                  <Text style={styles.statLabel}>最大コンボ</Text>
+                  <Text style={[styles.statValue, styles.comboValue]}>x{comboCount}</Text>
+                </View>
+              )}
             </View>
           )}
 
           {/* Fail message */}
           {!isSuccess && (
             <Text style={styles.failMessage}>
-              残りのピースを置く場所がありません。
+              {piecesRemaining > 0
+                ? '残りのピースを置く場所がありません。'
+                : 'ラインが消去されていません。正しい位置にピースを配置しましょう。'}
             </Text>
           )}
 
           {/* Actions */}
           <View style={styles.actions}>
-            {/* Revive button (fail only, if not already used) */}
+            {/* Retry button (fail) — watch ad if available, otherwise plain retry */}
             {!isSuccess && canRevive && adReady && (
               <TouchableOpacity style={[styles.button, styles.reviveButton]} onPress={onRevive}>
                 <Text style={styles.reviveButtonText}>
-                  広告を見て復活する
+                  広告を見てやり直す
                 </Text>
-                <Text style={styles.reviveSubText}>1枚スキップ</Text>
+              </TouchableOpacity>
+            )}
+            {!isSuccess && (!canRevive || !adReady) && (
+              <TouchableOpacity style={[styles.button, styles.primaryButton]} onPress={onRetry}>
+                <Text style={styles.primaryButtonText}>やり直す</Text>
               </TouchableOpacity>
             )}
 
@@ -97,16 +118,16 @@ export function ResultModal({
               </TouchableOpacity>
             )}
 
-            {/* Retry button */}
-            {!isSuccess && (
+            {/* Retry on success — optional re-attempt */}
+            {isSuccess && (
               <TouchableOpacity style={[styles.button, styles.secondaryButton]} onPress={onRetry}>
-                <Text style={styles.secondaryButtonText}>もう一度挑戦</Text>
+                <Text style={styles.secondaryButtonText}>もう一度挑戦する</Text>
               </TouchableOpacity>
             )}
           </View>
         </View>
       </View>
-    </Modal>
+    </OverlayModal>
   );
 }
 
@@ -146,6 +167,10 @@ const styles = StyleSheet.create({
     fontWeight: Typography.bold,
     color: Colors.surface,
   },
+  starSection: {
+    paddingVertical: Spacing.md,
+    alignItems: 'center',
+  },
   stats: {
     paddingHorizontal: Spacing.xl,
     paddingTop: Spacing.lg,
@@ -170,6 +195,10 @@ const styles = StyleSheet.create({
   },
   bonusValue: {
     color: Colors.success,
+  },
+  comboValue: {
+    color: Colors.warning,
+    fontWeight: Typography.bold,
   },
   failMessage: {
     fontSize: Typography.base,

@@ -12,13 +12,16 @@ import { useGameStore } from '../store/gameStore';
 import { Analytics } from '../analytics';
 import { Colors, Typography, Spacing, Radii } from '../theme';
 import { formatDateJa, getTodayString } from '../utils/date';
+import { BannerAdView } from '../ads/BannerAdView';
+import { StarDisplay } from '../components/StarDisplay';
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'DailyComplete'>;
 };
 
 export function DailyCompleteScreen({ navigation }: Props) {
-  const { daily, streak } = useGameStore();
+  const daily = useGameStore(s => s.daily);
+  const streak = useGameStore(s => s.streak);
 
   useEffect(() => {
     Analytics.logScreen('DailyCompleteScreen');
@@ -26,6 +29,9 @@ export function DailyCompleteScreen({ navigation }: Props) {
 
   const totalScore = daily?.totalDayScore ?? 0;
   const puzzleCount = daily?.completedPuzzleIds.length ?? 0;
+  const puzzleStars = daily?.puzzleStars ?? {};
+  const totalStars = Object.values(puzzleStars).reduce((sum, s) => sum + s, 0);
+  const maxStars = puzzleCount * 3;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -34,8 +40,25 @@ export function DailyCompleteScreen({ navigation }: Props) {
         <View style={styles.header}>
           <Text style={styles.checkmark}>✓</Text>
           <Text style={styles.title}>今日のパズル完了！</Text>
-          <Text style={styles.dateText}>{formatDateJa(getTodayString())}</Text>
+          <Text style={styles.dateText}>{formatDateJa(daily?.date ?? getTodayString())}</Text>
         </View>
+
+        {/* Stars summary */}
+        {totalStars > 0 && (
+          <View style={styles.starsCard}>
+            <View style={styles.starRow}>
+              {daily?.completedPuzzleIds.map((id, i) => (
+                <View key={id} style={styles.starItem}>
+                  <Text style={styles.starPuzzleLabel}>Q{i + 1}</Text>
+                  <StarDisplay stars={puzzleStars[id] ?? 0} size="sm" />
+                </View>
+              ))}
+            </View>
+            <Text style={styles.starTotal}>
+              {totalStars} / {maxStars}
+            </Text>
+          </View>
+        )}
 
         {/* Stats */}
         <View style={styles.statsCard}>
@@ -71,12 +94,13 @@ export function DailyCompleteScreen({ navigation }: Props) {
         {/* Home button */}
         <TouchableOpacity
           style={styles.homeButton}
-          onPress={() => navigation.navigate('Home')}
+          onPress={() => navigation.reset({ index: 0, routes: [{ name: 'Home' }] })}
           activeOpacity={0.8}
         >
           <Text style={styles.homeButtonText}>ホームに戻る</Text>
         </TouchableOpacity>
       </View>
+      <BannerAdView />
     </SafeAreaView>
   );
 }
@@ -112,6 +136,40 @@ const styles = StyleSheet.create({
     fontSize: Typography.base,
     color: Colors.textSecondary,
     marginTop: Spacing.xs,
+  },
+  starsCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: Radii.xl,
+    width: '100%',
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: Spacing.lg,
+    marginBottom: Spacing.base,
+    alignItems: 'center',
+    shadowColor: Colors.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  starRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: Spacing.xl,
+  },
+  starItem: {
+    alignItems: 'center',
+    gap: Spacing.xs,
+  },
+  starPuzzleLabel: {
+    fontSize: Typography.xs,
+    color: Colors.textMuted,
+    fontWeight: Typography.medium,
+  },
+  starTotal: {
+    fontSize: Typography.md,
+    fontWeight: Typography.bold,
+    color: Colors.warning,
+    marginTop: Spacing.sm,
   },
   statsCard: {
     backgroundColor: Colors.surface,

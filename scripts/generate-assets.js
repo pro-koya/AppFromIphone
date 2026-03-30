@@ -1,16 +1,16 @@
 #!/usr/bin/env node
 /**
- * generate-assets.js
+ * generate-assets.js — Calm Blokku
  *
  * Generates app icon, splash screen, Android foreground icon, and favicon as PNG.
  * Zero external dependencies — uses only Node.js built-in zlib and fs.
  *
  * Design:
- *   - Visual motif: 3×3 block puzzle grid (two interlocking L-shapes)
- *   - Icon:   1024×1024  dark warm background  (#2C2A26)
- *   - Splash: 1024×1024  warm off-white bg      (#F5F0E8)  + grid shifted slightly above center
- *   - Android foreground: 1024×1024  light bg, grid in safe-zone
- *   - Favicon: 32×32     dark bg, 2×2 mini grid
+ *   - Visual motif: diagonal staircase of block pairs + ensō (zen circle) frame
+ *   - Icon:   1024×1024  dark warm background (#2C2A26) + radial glow + ensō + blocks
+ *   - Splash: 1024×1024  warm off-white bg    (#F5F0E8) + ensō + blocks (above center)
+ *   - Android foreground: 1024×1024  light bg, ensō + blocks in safe-zone
+ *   - Favicon: 32×32     dark bg, 2×2 diagonal mini grid
  *
  * Run:  node scripts/generate-assets.js
  */
@@ -51,7 +51,6 @@ function pngChunk(type, data) {
 }
 
 function writePNG(width, height, rgba) {
-  // Scanlines: 1 filter byte (0 = None) + 3 bytes RGB per pixel
   const stride = 1 + width * 3;
   const raw = Buffer.alloc(stride * height);
   for (let y = 0; y < height; y++) {
@@ -87,11 +86,16 @@ function createCanvas(width, height, bgR, bgG, bgB) {
     rgba[i] = r; rgba[i + 1] = g; rgba[i + 2] = b; rgba[i + 3] = 255;
   }
 
-  /**
-   * Signed-distance function for a rounded rectangle.
-   * Returns ≤ 0 if inside, > 0 if outside.
-   * cx/cy = center, hw/hh = half-width/height, r = corner radius
-   */
+  /** Blend a pixel with the existing color using alpha (0–1) */
+  function blendPixel(x, y, r, g, b, alpha) {
+    const xi = x | 0, yi = y | 0;
+    if (xi < 0 || xi >= width || yi < 0 || yi >= height || alpha <= 0) return;
+    const i = (yi * width + xi) * 4;
+    rgba[i]     = Math.round(rgba[i]     + (r - rgba[i])     * Math.min(1, alpha));
+    rgba[i + 1] = Math.round(rgba[i + 1] + (g - rgba[i + 1]) * Math.min(1, alpha));
+    rgba[i + 2] = Math.round(rgba[i + 2] + (b - rgba[i + 2]) * Math.min(1, alpha));
+  }
+
   function sdfRR(px, py, cx, cy, hw, hh, r) {
     const ax = Math.abs(px - cx) - (hw - r);
     const ay = Math.abs(py - cy) - (hh - r);
@@ -109,10 +113,8 @@ function createCanvas(width, height, bgR, bgG, bgB) {
   }
 
   /**
-   * Draw a block with:
-   *   - top 22%: +28 lighter (highlight)
-   *   - middle 60%: base colour
-   *   - bottom 18%: -22 darker (shadow)
+   * Draw a block with highlight/shadow banding:
+   *   top 22%: +28 lighter | middle 60%: base | bottom 18%: -22 darker
    */
   function drawBlock(x, y, w, h, r, R, G, B) {
     const cx = x + w / 2, cy = y + h / 2, hw = w / 2, hh = h / 2;
@@ -133,7 +135,7 @@ function createCanvas(width, height, bgR, bgG, bgB) {
 
   return {
     width, height, rgba,
-    setPixel, fillRoundRect, drawBlock,
+    setPixel, blendPixel, fillRoundRect, drawBlock,
     toPNG: () => writePNG(width, height, rgba),
   };
 }
@@ -150,15 +152,96 @@ const C = {
   BLUE:       [107, 143, 171],   // #6B8FAB slate blue
   GREEN:      [123, 169, 156],   // #7BA99C sage green
   TERRA:      [201, 123, 106],   // #C97B6A terracotta
+  ENSO_DARK:  [78,  72,  58 ],   // warm gold on dark bg
+  ENSO_LITE:  [195, 188, 170],   // warm gold on light bg
 };
 
-// 3×3 puzzle grid: null = empty cell
-// Pattern: blue L-shape (top-left) + green L-shape (bottom-right) + terracotta dot
+// 3×3 puzzle grid — diagonal staircase pattern
+// Blue pair (top-left) → Green pair (center) → Terracotta accent (bottom-right)
 const GRID_3x3 = [
-  [C.BLUE,  C.BLUE,  null    ],
-  [C.BLUE,  C.GREEN, C.GREEN ],
-  [null,    C.GREEN, C.TERRA ],
+  [C.BLUE,  C.BLUE,  null   ],
+  [null,    C.GREEN, C.GREEN],
+  [null,    null,    C.TERRA],
 ];
+
+// ============================================================================
+// Ensō + glow drawing
+// ============================================================================
+
+/**
+ * Subtle radial glow — blends a warm highlight towards the center of the canvas.
+ * Uses quadratic falloff for a natural look.
+ */
+function applyRadialGlow(canvas, cx, cy, radius, glowR, glowG, glowB, intensity) {
+  const yMin = Math.max(0, Math.floor(cy - radius));
+  const yMax = Math.min(canvas.height - 1, Math.ceil(cy + radius));
+  const xMin = Math.max(0, Math.floor(cx - radius));
+  const xMax = Math.min(canvas.width - 1, Math.ceil(cx + radius));
+  const rr = radius * radius;
+
+  for (let py = yMin; py <= yMax; py++) {
+    for (let px = xMin; px <= xMax; px++) {
+      const dx = px - cx, dy = py - cy;
+      const d2 = dx * dx + dy * dy;
+      if (d2 > rr) continue;
+      const t = 1 - Math.sqrt(d2) / radius;
+      canvas.blendPixel(px, py, glowR, glowG, glowB, t * t * intensity);
+    }
+  }
+}
+
+/**
+ * Ensō — partial zen circle with anti-aliased edges and smooth gap transition.
+ * gapCenter: angle (radians) of the center of the gap, in atan2 coordinates
+ * gapSize:   total angle (radians) of the gap
+ */
+function drawEnso(canvas, cx, cy, radius, thickness, gapCenter, gapSize, R, G, B) {
+  const outer = radius + thickness / 2 + 2;
+  const halfGap = gapSize / 2;
+  const fadeAngle = 0.1; // smooth transition at gap edges (radians)
+  const halfThick = thickness / 2;
+
+  const yMin = Math.max(0, Math.floor(cy - outer));
+  const yMax = Math.min(canvas.height - 1, Math.ceil(cy + outer));
+  const xMin = Math.max(0, Math.floor(cx - outer));
+  const xMax = Math.min(canvas.width - 1, Math.ceil(cx + outer));
+
+  for (let py = yMin; py <= yMax; py++) {
+    for (let px = xMin; px <= xMax; px++) {
+      const dx = px - cx, dy = py - cy;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const ringDist = Math.abs(dist - radius);
+      if (ringDist > halfThick + 1.5) continue;
+
+      // Ring edge anti-aliasing
+      let ringAlpha;
+      if (ringDist <= halfThick - 0.5) {
+        ringAlpha = 1;
+      } else {
+        ringAlpha = Math.max(0, 1 - (ringDist - halfThick + 0.5) / 1.5);
+      }
+
+      // Gap check with smooth fade at edges
+      let angle = Math.atan2(dy, dx);
+      let relAngle = angle - gapCenter;
+      while (relAngle > Math.PI) relAngle -= 2 * Math.PI;
+      while (relAngle < -Math.PI) relAngle += 2 * Math.PI;
+
+      const absRel = Math.abs(relAngle);
+      let gapAlpha;
+      if (absRel < halfGap - fadeAngle) {
+        gapAlpha = 0;
+      } else if (absRel < halfGap + fadeAngle) {
+        gapAlpha = (absRel - halfGap + fadeAngle) / (2 * fadeAngle);
+      } else {
+        gapAlpha = 1;
+      }
+
+      const alpha = ringAlpha * gapAlpha;
+      if (alpha > 0.01) canvas.blendPixel(px, py, R, G, B, alpha);
+    }
+  }
+}
 
 // ============================================================================
 // Grid drawing
@@ -195,50 +278,85 @@ function gridLayout(canvasSize, fraction) {
 // Asset generators
 // ============================================================================
 
-/** App icon — 1024×1024, dark warm background */
+/** App icon — 1024×1024, dark warm bg + radial glow + ensō + diagonal blocks */
 function generateIcon(size) {
   const canvas = createCanvas(size, size, ...C.DARK_BG);
+  const center = size / 2;
+
+  // 1. Subtle radial glow (warm center)
+  applyRadialGlow(canvas, center, center, size * 0.48, 80, 74, 60, 0.22);
+
+  // 2. Ensō — partial zen circle framing the grid
   const { cellSize, gap, startX, gridW } = gridLayout(size, 0.575);
+  const ensoRadius = gridW / 2 + size * 0.045;
+  const ensoThickness = Math.round(size * 0.013);
+  // Gap at lower-right (~35° below right axis), ~65° wide
+  drawEnso(canvas, center, center, ensoRadius, ensoThickness,
+    Math.PI * 0.22, Math.PI * 0.36, ...C.ENSO_DARK);
+
+  // 3. Block grid
   const startY = Math.round((size - gridW) / 2);
   drawGrid3x3(canvas, startX, startY, cellSize, gap, true);
+
   return canvas.toPNG();
 }
 
-/** Splash screen — 1024×1024, warm light background, grid shifted slightly above centre */
+/** Splash screen — 1024×1024, warm light bg + ensō + blocks (shifted above centre) */
 function generateSplash(size) {
   const canvas = createCanvas(size, size, ...C.LIGHT_BG);
+  const center = size / 2;
+
   const { cellSize, gap, startX, gridW } = gridLayout(size, 0.60);
   const startY = Math.round((size - gridW) / 2) - Math.round(size * 0.04);
+  const gridCenterY = startY + gridW / 2;
+
+  // Ensō centered on grid
+  const ensoRadius = gridW / 2 + size * 0.04;
+  const ensoThickness = Math.round(size * 0.010);
+  drawEnso(canvas, center, gridCenterY, ensoRadius, ensoThickness,
+    Math.PI * 0.22, Math.PI * 0.36, ...C.ENSO_LITE);
+
   drawGrid3x3(canvas, startX, startY, cellSize, gap, false);
   return canvas.toPNG();
 }
 
-/** Android adaptive icon foreground — 1024×1024, light bg, grid in safe zone (~67%) */
+/** Android adaptive icon foreground — 1024×1024, light bg, ensō + blocks in safe zone */
 function generateAndroidFg(size) {
   const canvas = createCanvas(size, size, ...C.LIGHT_BG);
+  const center = size / 2;
+
   const safeZone = Math.round(size * 0.67);
   const totalGrid = Math.round(safeZone * 0.84);
-  const gap       = Math.round(size * 0.022);
-  const cellSize  = Math.round((totalGrid - gap * 2) / 3);
-  const gridW     = cellSize * 3 + gap * 2;
+  const gapSize   = Math.round(size * 0.022);
+  const cellSize  = Math.round((totalGrid - gapSize * 2) / 3);
+  const gridW     = cellSize * 3 + gapSize * 2;
   const startX    = Math.round((size - gridW) / 2);
   const startY    = Math.round((size - gridW) / 2);
-  drawGrid3x3(canvas, startX, startY, cellSize, gap, false);
+
+  // Ensō
+  const ensoRadius = gridW / 2 + size * 0.035;
+  const ensoThickness = Math.round(size * 0.009);
+  drawEnso(canvas, center, center, ensoRadius, ensoThickness,
+    Math.PI * 0.22, Math.PI * 0.36, ...C.ENSO_LITE);
+
+  drawGrid3x3(canvas, startX, startY, cellSize, gapSize, false);
   return canvas.toPNG();
 }
 
-/** Favicon — 32×32, dark bg, 2×2 simplified grid */
+/** Favicon — 32×32, dark bg, 2×2 diagonal pattern */
 function generateFavicon() {
   const size = 32;
   const canvas = createCanvas(size, size, ...C.DARK_BG);
   const cell = 11, gap = 2, r = 2;
   const sx = 4, sy = 4;
+  // Diagonal pattern: blue top-left, green top-right, terra bottom-right
   const cells = [
     { x: sx,            y: sy,            color: C.BLUE  },
     { x: sx + cell+gap, y: sy,            color: C.GREEN },
-    { x: sx,            y: sy + cell+gap, color: C.BLUE  },
     { x: sx + cell+gap, y: sy + cell+gap, color: C.TERRA },
   ];
+  // Empty cell at bottom-left
+  canvas.fillRoundRect(sx, sy + cell + gap, cell, cell, r, ...C.EMPTY_DARK);
   for (const { x, y, color } of cells) {
     canvas.drawBlock(x, y, cell, cell, r, ...color);
   }
@@ -258,7 +376,7 @@ const jobs = [
   { name: 'favicon.png',                 gen: () => generateFavicon()     },
 ];
 
-console.log('Generating assets...\n');
+console.log('Generating Calm Blokku assets...\n');
 for (const { name, gen } of jobs) {
   const data = gen();
   fs.writeFileSync(path.join(ASSETS_DIR, name), data);

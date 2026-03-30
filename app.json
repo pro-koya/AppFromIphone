@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "Daily Block Puzzle",
+    "name": "Calm Blokku",
     "slug": "daily-block-puzzle",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -13,19 +13,45 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.yourcompany.dailyblockpuzzle"
+      "bundleIdentifier": "com.koya1104.blockzen",
+      "infoPlist": {
+        "NSUserTrackingUsageDescription": "あなたに合った広告を表示するために、トラッキングの許可をお願いしています。",
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#F5F0E8",
         "foregroundImage": "./assets/android-icon-foreground.png"
-      }
+      },
+      "permissions": [
+        "com.google.android.gms.permission.AD_ID"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "@react-native-async-storage/async-storage"
-    ]
+      [
+        "react-native-google-mobile-ads",
+        {
+          "androidAppId": "ca-app-pub-3940256099942544~3347511713",
+          "iosAppId": "ca-app-pub-4570439660764279~5272068272"
+        }
+      ],
+      "expo-tracking-transparency",
+      "expo-asset"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "b5f508d8-f8b6-4794-9f04-9ce8f12c1b29"
+      },
+      "admobRewardedIos": "ca-app-pub-4570439660764279/6017206133",
+      "admobInterstitialIos": "ca-app-pub-4570439660764279/2386617737",
+      "admobRewardedAndroid": "ca-app-pub-3940256099942544/5224354917",
+      "admobInterstitialAndroid": "ca-app-pub-3940256099942544/1033173712",
+      "admobBannerIos": "ca-app-pub-4570439660764279/1234567890",
+      "admobBannerAndroid": "ca-app-pub-3940256099942544/6300978111"
+    }
   }
 }

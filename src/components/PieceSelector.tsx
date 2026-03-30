@@ -1,22 +1,34 @@
 import React from 'react';
-import { View, StyleSheet, Text, ScrollView } from 'react-native';
+import { View, StyleSheet, Text } from 'react-native';
 import { Piece } from '../game/types';
 import { PiecePreview } from './PiecePreview';
-import { Colors, Typography, Spacing, Radii } from '../theme';
+import { Colors, Typography, Spacing } from '../theme';
 
 interface PieceSelectorProps {
   pieces: Piece[];
   selectedIndex: number | null;
   onSelectPiece: (index: number) => void;
+  draggingIndex: number | null;
+  onDragStart: (index: number, pageX: number, pageY: number) => void;
+  onDragMove: (pageX: number, pageY: number) => void;
+  onDragEnd: (pageX: number, pageY: number) => void;
 }
 
-export function PieceSelector({ pieces, selectedIndex, onSelectPiece }: PieceSelectorProps) {
+export function PieceSelector({
+  pieces,
+  selectedIndex,
+  onSelectPiece,
+  draggingIndex,
+  onDragStart,
+  onDragMove,
+  onDragEnd,
+}: PieceSelectorProps) {
   if (pieces.length === 0) return null;
 
   return (
     <View style={styles.container}>
       <Text style={styles.label}>
-        ピースを選んで、置く場所をタップ
+        ドラッグして配置 / タップで選択
       </Text>
       <View style={styles.pieces}>
         {pieces.map((piece, index) => (
@@ -26,6 +38,10 @@ export function PieceSelector({ pieces, selectedIndex, onSelectPiece }: PieceSel
             isSelected={selectedIndex === index}
             onSelect={() => onSelectPiece(index)}
             index={index}
+            isDragging={draggingIndex === index}
+            onDragStart={onDragStart}
+            onDragMove={onDragMove}
+            onDragEnd={onDragEnd}
           />
         ))}
       </View>
